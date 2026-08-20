@@ -815,7 +815,10 @@ export const OpportunityDetail: React.FC = () => {
                 <button
                   type="button"
                   id="next-to-insight-btn"
-                  onClick={() => setActiveTab('insight')}
+                  onClick={() => {
+                    advanceOpportunityStage(opp.id, 'insight');
+                    setActiveTab('insight');
+                  }}
                   className="px-4 py-2 bg-[#1769E0] text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
                 >
                   <span>Synthesize Consumer Insight</span>
@@ -990,7 +993,10 @@ export const OpportunityDetail: React.FC = () => {
                 <button
                   type="button"
                   id="next-to-opportunity-btn"
-                  onClick={() => setActiveTab('opportunity')}
+                  onClick={() => {
+                    advanceOpportunityStage(opp.id, 'opportunity');
+                    setActiveTab('opportunity');
+                  }}
                   className="px-4 py-2 bg-[#1769E0] text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
                 >
                   <span>Evaluate Opportunity Scorecard</span>
@@ -1103,7 +1109,10 @@ export const OpportunityDetail: React.FC = () => {
                 {opp.currentStage !== 'opportunity' && (
                   <button
                     type="button"
-                    onClick={() => setActiveTab('strategy')}
+                    onClick={() => {
+                      advanceOpportunityStage(opp.id, 'strategy');
+                      setActiveTab('strategy');
+                    }}
                     className="w-full py-2.5 bg-[#F5F9FF] text-[#1769E0] rounded-xl text-xs font-bold hover:bg-blue-100 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                   >
                     <span>Proceed to Strategy & Brief</span>
@@ -1307,7 +1316,11 @@ export const OpportunityDetail: React.FC = () => {
                 <button
                   type="button"
                   id="next-to-creative-btn"
-                  onClick={() => setActiveTab('creative')}
+                  onClick={() => {
+                    approveStrategy(opp.id);
+                    advanceOpportunityStage(opp.id, 'creative');
+                    setActiveTab('creative');
+                  }}
                   className="px-4 py-2 bg-[#1769E0] text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-colors flex items-center gap-1.5 shadow-xs cursor-pointer"
                 >
                   <span>Open Creative Studio</span>
@@ -1568,7 +1581,10 @@ export const OpportunityDetail: React.FC = () => {
             <button
               type="button"
               id="next-to-governance-btn"
-              onClick={() => setActiveTab('governance')}
+              onClick={() => {
+                advanceOpportunityStage(opp.id, 'governance');
+                setActiveTab('governance');
+              }}
               className="px-5 py-2.5 bg-[#1769E0] text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-colors flex items-center gap-2 shadow-xs cursor-pointer"
             >
               <span>Audit Governance & Safety</span>
@@ -1739,6 +1755,7 @@ export const OpportunityDetail: React.FC = () => {
                     id="approve-governance-btn"
                     onClick={() => {
                       approveGovernance(opp.id);
+                      advanceOpportunityStage(opp.id, 'localization');
                       setActiveTab('localization');
                     }}
                     className="px-5 py-2.5 bg-[#1769E0] text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-colors flex items-center gap-2 shadow-xs cursor-pointer"
@@ -1971,7 +1988,10 @@ export const OpportunityDetail: React.FC = () => {
             <button
               type="button"
               id="next-to-activation-btn"
-              onClick={() => setActiveTab('activation')}
+              onClick={() => {
+                advanceOpportunityStage(opp.id, 'activation');
+                setActiveTab('activation');
+              }}
               className="px-5 py-2.5 bg-[#1769E0] text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-colors flex items-center gap-2 shadow-xs cursor-pointer"
             >
               <span>Prepare Activation Manifest</span>

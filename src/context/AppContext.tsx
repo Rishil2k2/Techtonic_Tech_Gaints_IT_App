@@ -267,26 +267,81 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       learning: 100
     };
 
+    const stageNextActionMap: Record<WorkflowStage, string> = {
+      signal: 'Synthesize & Validate Cultural Signal Ingestion',
+      insight: 'Synthesize & Validate Consumer & Cultural Insight',
+      opportunity: 'Evaluate AI Opportunity Scorecard & Human Gate',
+      strategy: 'Review & Approve AI Strategy Blueprint',
+      creative: 'Select & Approve Campaign Creative Direction',
+      governance: 'Review Automated Governance & Safety Audit',
+      localization: 'Review & Approve Localized Market Executions',
+      activation: 'Deploy Multi-Market Live Activation Manifest',
+      learning: 'Review Closed-Loop Learning & Attribution Telemetry'
+    };
+
+    const stageAuditNameMap: Record<WorkflowStage, string> = {
+      signal: 'Signal Ingestion & Real-Time Evidence Validated',
+      insight: 'Consumer & Cultural Insight Synthesized',
+      opportunity: 'Opportunity Scorecard Evaluated & Ready for Human Gate',
+      strategy: 'Strategic Blueprint & Messaging Guardrails Formulated',
+      creative: 'Creative Studio Orchestrated (3 Formats)',
+      governance: 'Governance, Brand Safety & Legal Cleared',
+      localization: 'Multi-Market Creative Localizations Prepared',
+      activation: 'Live Activation Manifest Compiled & Ready',
+      learning: 'Closed-Loop Telemetry & Learnings Attributed'
+    };
+
+    const nowTimestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
     setOpportunities(prev => prev.map(opp => {
       if (opp.id === opportunityId) {
+        const auditEntry: PipelineAuditEntry = {
+          id: `audit-${Date.now()}`,
+          stage,
+          previousStage: opp.currentStage,
+          targetStage: stage,
+          action: 'ADVANCED',
+          timestamp: nowTimestamp,
+          actor: userWorkspace.userName,
+          role: userWorkspace.userRole,
+          reason: `Progressed to ${stage.toUpperCase()} stage`,
+          details: stageAuditNameMap[stage] || `Advanced pipeline stage to ${stage}`
+        };
+
         return {
           ...opp,
           currentStage: stage,
-          stageProgress: stageProgressMap[stage] || opp.stageProgress
+          stageProgress: stageProgressMap[stage] || opp.stageProgress,
+          pipelineAuditHistory: [auditEntry, ...(opp.pipelineAuditHistory || [])]
         };
       }
       return opp;
     }));
 
-    // Update agent statuses
+    const progressVal = stageProgressMap[stage] || 35;
+    const nextActionMsg = stageNextActionMap[stage] || `Review Stage: ${stage.toUpperCase()}`;
+    syncWorkflowItem(opportunityId, stage, progressVal, nextActionMsg);
+
+    // Update agent statuses dynamically based on stage
     setAgents(prev => prev.map(ag => {
+      if (stage === 'signal' && ag.id === 'agent-1') return { ...ag, status: 'ACTIVE', currentTask: 'Validating real-time cultural telemetry' };
+      if (stage === 'insight' && ag.id === 'agent-2') return { ...ag, status: 'ACTIVE', currentTask: 'Synthesizing psychological tension and brand implication' };
+      if (stage === 'opportunity' && ag.id === 'agent-3') return { ...ag, status: 'ACTIVE', currentTask: 'Scoring opportunity dimensions and commercial potential' };
       if (stage === 'strategy' && ag.id === 'agent-4') return { ...ag, status: 'ACTIVE', currentTask: 'Synthesizing creative strategy blueprint' };
       if (stage === 'creative' && ag.id === 'agent-5') return { ...ag, status: 'ACTIVE', currentTask: 'Orchestrating 3 campaign creative directions' };
       if (stage === 'governance' && ag.id === 'agent-6') return { ...ag, status: 'ACTIVE', currentTask: 'Executing automated compliance audit' };
       if (stage === 'localization' && ag.id === 'agent-7') return { ...ag, status: 'ACTIVE', currentTask: 'Localizing creative packs for India, Brazil, UK' };
       if (stage === 'activation' && ag.id === 'agent-8') return { ...ag, status: 'ACTIVE', currentTask: 'Simulating multi-market live telemetry' };
+      if (stage === 'learning' && ag.id === 'agent-9') return { ...ag, status: 'ACTIVE', currentTask: 'Synthesizing attribution insights & knowledge graph weights' };
       return ag;
     }));
+
+    addNotification(
+      `Pipeline Advanced: ${stage.toUpperCase()}`,
+      stageAuditNameMap[stage] || `Opportunity moved to ${stage.toUpperCase()} stage.`,
+      'opportunity',
+      opportunityId
+    );
   };
 
   const approveOpportunityDecision = (opportunityId: string, notes?: string) => {
