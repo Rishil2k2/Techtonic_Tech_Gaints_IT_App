@@ -1,0 +1,6 @@
+{
+  "name": "Project NEXT - AI Brand Lifecycle Orchestration",
+  "description": "Enterprise AI-native brand lifecycle orchestration platform for Unilever brand teams connecting cultural signals to insights, strategies, creative, governance, localization, and activation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
