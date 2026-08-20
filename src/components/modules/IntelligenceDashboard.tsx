@@ -16,7 +16,13 @@ import { useApp } from '../../context/AppContext';
 import { IntelligenceSignal } from '../../types';
 
 export const IntelligenceDashboard: React.FC = () => {
-  const { intelligenceSignals, selectOpportunity, setActiveModule, openIngestModal } = useApp();
+  const { 
+    intelligenceSignals, 
+    selectOpportunity, 
+    setActiveModule, 
+    openIngestModal,
+    openOpportunityGenerator 
+  } = useApp();
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [search, setSearch] = useState<string>('');
 
@@ -34,7 +40,7 @@ export const IntelligenceDashboard: React.FC = () => {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-extrabold text-[#0B1F3A] tracking-tight">
-            Consumer Intelligence
+            Consumer Intelligence & Cultural Listening
           </h1>
           <p className="text-xs sm:text-sm text-[#5B6B7A] mt-0.5">
             Real-time cultural signal ingestion, velocity monitoring, and Unilever category sentiment tracking.
@@ -44,10 +50,18 @@ export const IntelligenceDashboard: React.FC = () => {
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={() => openIngestModal()}
-            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-[#1769E0] text-white text-xs font-bold shadow-xs hover:bg-blue-700 transition-all cursor-pointer"
+            onClick={() => openOpportunityGenerator()}
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-linear-to-r from-[#1769E0] to-cyan-600 hover:from-blue-700 hover:to-cyan-500 text-white text-xs font-extrabold shadow-xs transition-all cursor-pointer ring-2 ring-blue-300/30"
           >
-            <Sparkles className="w-3.5 h-3.5 text-cyan-300" />
+            <Sparkles className="w-3.5 h-3.5 text-cyan-200" />
+            <span>✨ Scan & Discover Opportunities</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => openIngestModal()}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#0B1F3A] text-white text-xs font-bold shadow-xs hover:bg-[#112F56] transition-all cursor-pointer"
+          >
             <span>+ Ingest Custom Signal</span>
           </button>
         </div>

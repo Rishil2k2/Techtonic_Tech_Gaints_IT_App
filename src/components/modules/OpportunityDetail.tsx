@@ -17,7 +17,19 @@ import {
   Share2,
   Clock,
   Layers,
-  AlertTriangle
+  AlertTriangle,
+  RotateCcw,
+  Ban,
+  History,
+  Undo2,
+  Play,
+  Pause,
+  ShieldAlert,
+  ListRestart,
+  X,
+  Info,
+  HelpCircle,
+  ChevronDown
 } from 'lucide-react';
 import confetti from 'canvas-confetti';
 import { useApp } from '../../context/AppContext';
@@ -32,6 +44,13 @@ export const OpportunityDetail: React.FC = () => {
   const { 
     selectedOpportunity, 
     selectOpportunity,
+    advanceOpportunityStage,
+    cancelPipelineStage,
+    resumePipelineStage,
+    retracePipeline,
+    resetOpportunityPipeline,
+    cancelLocalizationMarket,
+    cancelCreativeConcept,
     approveOpportunityDecision,
     modifyOpportunityDecision,
     rejectOpportunityDecision,
@@ -55,6 +74,21 @@ export const OpportunityDetail: React.FC = () => {
   const [activeTab, setActiveTab] = useState<WorkflowStage>('signal');
   const [showHumanGateModal, setShowHumanGateModal] = useState(false);
   const [isActivating, setIsActivating] = useState(false);
+
+  // Pipeline Management Modal States
+  const [showRetraceModal, setShowRetraceModal] = useState(false);
+  const [retraceTargetStage, setRetraceTargetStage] = useState<WorkflowStage>('signal');
+  const [retraceReason, setRetraceReason] = useState('');
+
+  const [showCancelStageModal, setShowCancelStageModal] = useState(false);
+  const [cancelTargetStage, setCancelTargetStage] = useState<WorkflowStage>('strategy');
+  const [cancelReasonCategory, setCancelReasonCategory] = useState('Market conditions changed');
+  const [customCancelReason, setCustomCancelReason] = useState('');
+
+  const [showResetModal, setShowResetModal] = useState(false);
+  const [resetTargetStart, setResetTargetStart] = useState<'signal' | 'opportunity'>('signal');
+
+  const [showAuditDrawer, setShowAuditDrawer] = useState(false);
   
   // Custom user input state handlers across the 9 stages
   const [showAddEvidence, setShowAddEvidence] = useState(false);
@@ -277,6 +311,51 @@ export const OpportunityDetail: React.FC = () => {
     }, 1200);
   };
 
+  // Pipeline Management Actions
+  const stageOrderList: WorkflowStage[] = [
+    'signal', 'insight', 'opportunity', 'strategy', 'creative', 'governance', 'localization', 'activation', 'learning'
+  ];
+
+  const openRetraceModal = (suggestedStage?: WorkflowStage) => {
+    if (suggestedStage) {
+      setRetraceTargetStage(suggestedStage);
+    } else {
+      const curIdx = stageOrderList.indexOf(opp.currentStage);
+      const prevStage = curIdx > 0 ? stageOrderList[curIdx - 1] : 'signal';
+      setRetraceTargetStage(prevStage);
+    }
+    setRetraceReason('');
+    setShowRetraceModal(true);
+  };
+
+  const confirmRetrace = () => {
+    retracePipeline(opp.id, retraceTargetStage, retraceReason.trim() || undefined);
+    setActiveTab(retraceTargetStage);
+    setShowRetraceModal(false);
+    setRetraceReason('');
+  };
+
+  const openCancelModal = (targetStage?: WorkflowStage) => {
+    setCancelTargetStage(targetStage || activeTab || opp.currentStage);
+    setCancelReasonCategory('Market conditions changed');
+    setCustomCancelReason('');
+    setShowCancelStageModal(true);
+  };
+
+  const confirmCancelStage = () => {
+    const finalReason = customCancelReason.trim()
+      ? `${cancelReasonCategory}: ${customCancelReason.trim()}`
+      : cancelReasonCategory;
+    cancelPipelineStage(opp.id, cancelTargetStage, finalReason);
+    setShowCancelStageModal(false);
+  };
+
+  const confirmReset = () => {
+    resetOpportunityPipeline(opp.id, resetTargetStart);
+    setActiveTab(resetTargetStart);
+    setShowResetModal(false);
+  };
+
   return (
     <div id="opportunity-detail-workspace" className="space-y-6 max-w-7xl mx-auto pb-16">
       {/* ========================================================================= */}
@@ -320,10 +399,133 @@ export const OpportunityDetail: React.FC = () => {
         </div>
       </div>
 
+      {/* ========================================================================= */}
+      {/* PIPELINE CONTROL & STATE MANAGEMENT TOOLBAR */}
+      {/* ========================================================================= */}
+      <div className="bg-slate-900 text-white rounded-2xl p-4 shadow-xs border border-slate-800 flex flex-col md:flex-row md:items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-xl bg-blue-500/20 text-blue-400 flex items-center justify-center border border-blue-500/30">
+            <Layers className="w-4 h-4" />
+          </div>
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold text-white uppercase tracking-wider">
+                Pipeline Lifecycle Controls
+              </span>
+              <span className="text-[10px] px-2 py-0.5 rounded-full bg-slate-800 text-slate-300 font-semibold border border-slate-700">
+                Current: {opp.currentStage.toUpperCase()}
+              </span>
+              {(opp.canceledStages || []).length > 0 && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 font-bold border border-rose-500/30 flex items-center gap-1">
+                  <Ban className="w-3 h-3" /> {(opp.canceledStages || []).length} Stage(s) Canceled
+                </span>
+              )}
+            </div>
+            <p className="text-[11px] text-slate-400">
+              Retrace to previous stages, cancel specific pipeline phases, or reset execution state with full audit logging.
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center flex-wrap gap-2 shrink-0">
+          <button
+            type="button"
+            id="retrace-pipeline-btn"
+            onClick={() => openRetraceModal()}
+            className="px-3 py-1.5 rounded-xl bg-blue-600/30 hover:bg-blue-600/50 text-blue-300 hover:text-white border border-blue-500/40 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+            title="Roll back to a previous stage in the pipeline"
+          >
+            <RotateCcw className="w-3.5 h-3.5" />
+            <span>Retrace Pipeline</span>
+          </button>
+
+          <button
+            type="button"
+            id="cancel-stage-btn"
+            onClick={() => openCancelModal()}
+            className="px-3 py-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/40 text-rose-300 hover:text-white border border-rose-500/30 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+            title="Cancel a specific part or stage of this opportunity pipeline"
+          >
+            <Ban className="w-3.5 h-3.5" />
+            <span>Cancel Part/Stage</span>
+          </button>
+
+          <button
+            type="button"
+            id="reset-pipeline-btn"
+            onClick={() => setShowResetModal(true)}
+            className="px-3 py-1.5 rounded-xl bg-amber-500/20 hover:bg-amber-500/40 text-amber-300 hover:text-white border border-amber-500/30 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+            title="Reset opportunity back to clean start"
+          >
+            <RefreshCw className="w-3.5 h-3.5" />
+            <span>Reset Pipeline</span>
+          </button>
+
+          <button
+            type="button"
+            id="pipeline-audit-btn"
+            onClick={() => setShowAuditDrawer(true)}
+            className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer"
+            title="View Pipeline State Transitions & Audit Log"
+          >
+            <History className="w-3.5 h-3.5" />
+            <span>Audit History {opp.pipelineAuditHistory?.length ? `(${opp.pipelineAuditHistory.length})` : ''}</span>
+          </button>
+        </div>
+      </div>
+
+      {/* CANCELLATION NOTICE BANNER (if any stage is canceled) */}
+      {(opp.canceledStages || []).length > 0 && (
+        <div className="bg-rose-50 border-2 border-rose-200 rounded-2xl p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs shadow-xs animate-in fade-in duration-200">
+          <div className="flex items-start gap-3">
+            <div className="w-8 h-8 rounded-xl bg-rose-600 text-white flex items-center justify-center shrink-0 mt-0.5">
+              <Ban className="w-4 h-4" />
+            </div>
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="font-extrabold text-rose-900 text-sm">
+                  Pipeline Intervention Active: {(opp.canceledStages || []).map(s => s.toUpperCase()).join(', ')} Canceled
+                </span>
+              </div>
+              <p className="text-rose-800 text-[11px] mt-0.5">
+                {(opp.canceledStages || []).map(s => (
+                  <span key={s} className="block">
+                    • <strong>{s.toUpperCase()}</strong>: {opp.canceledStageReasons?.[s] || 'Execution stopped by Brand Manager.'}
+                  </span>
+                ))}
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            {(opp.canceledStages || []).includes(activeTab) && (
+              <button
+                type="button"
+                onClick={() => resumePipelineStage(opp.id, activeTab)}
+                className="px-3.5 py-1.5 rounded-xl bg-rose-700 text-white font-bold hover:bg-rose-800 transition-colors flex items-center gap-1.5 cursor-pointer shadow-xs"
+              >
+                <Play className="w-3.5 h-3.5" />
+                <span>Resume Stage ({activeTab.toUpperCase()})</span>
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => openRetraceModal()}
+              className="px-3 py-1.5 rounded-xl bg-white border border-rose-300 text-rose-700 font-bold hover:bg-rose-100 transition-colors flex items-center gap-1.5 cursor-pointer"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Retrace Stage</span>
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Dynamic Workflow Tracker Breadcrumb */}
       <WorkflowTracker
         currentStage={opp.currentStage}
+        canceledStages={opp.canceledStages || []}
         onSelectStage={(stage) => setActiveTab(stage)}
+        onRetraceStage={(stage) => openRetraceModal(stage)}
       />
 
       {/* Stage Tab Navigation Buttons */}
@@ -1082,7 +1284,26 @@ export const OpportunityDetail: React.FC = () => {
                 </ul>
               </div>
 
-              <div className="flex justify-end pt-2">
+              <div className="flex items-center justify-between pt-3 border-t border-[#DCE6F2]">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => openRetraceModal('opportunity')}
+                    className="px-3 py-1.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold flex items-center gap-1 cursor-pointer"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Retrace to Decision Gate</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openCancelModal('strategy')}
+                    className="px-3 py-1.5 rounded-xl border border-rose-200 text-rose-600 hover:bg-rose-50 text-xs font-semibold flex items-center gap-1 cursor-pointer"
+                  >
+                    <Ban className="w-3.5 h-3.5" />
+                    <span>Cancel Strategy</span>
+                  </button>
+                </div>
+
                 <button
                   type="button"
                   id="next-to-creative-btn"
@@ -1325,13 +1546,24 @@ export const OpportunityDetail: React.FC = () => {
           </div>
 
           <div className="flex items-center justify-between pt-4 border-t border-[#DCE6F2]">
-            <button
-              type="button"
-              onClick={() => setActiveTab('strategy')}
-              className="px-4 py-2 border border-[#DCE6F2] text-[#5B6B7A] rounded-xl text-xs font-semibold hover:bg-slate-50"
-            >
-              &larr; Back to Strategy
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => openRetraceModal('strategy')}
+                className="px-3 py-2 border border-[#DCE6F2] text-[#5B6B7A] rounded-xl text-xs font-semibold hover:bg-slate-50 flex items-center gap-1 cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Retrace to Strategy</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => openCancelModal('creative')}
+                className="px-3 py-2 border border-rose-200 text-rose-600 rounded-xl text-xs font-semibold hover:bg-rose-50 flex items-center gap-1 cursor-pointer"
+              >
+                <Ban className="w-3.5 h-3.5" />
+                <span>Cancel Creative Phase</span>
+              </button>
+            </div>
 
             <button
               type="button"
@@ -1474,26 +1706,47 @@ export const OpportunityDetail: React.FC = () => {
               </div>
 
               <div className="pt-3 border-t border-[#DCE6F2] flex items-center justify-between">
-                <button
-                  type="button"
-                  onClick={() => escalateGovernance(opp.id, 'Escalated for second legal audit.')}
-                  className="text-xs font-semibold text-amber-700 hover:underline"
-                >
-                  Request Legal / R&D Escalation
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => openRetraceModal('creative')}
+                    className="px-3 py-1.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50 text-xs font-semibold flex items-center gap-1 cursor-pointer"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>Retrace to Creative</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openCancelModal('governance')}
+                    className="px-3 py-1.5 rounded-xl border border-rose-200 text-rose-600 hover:bg-rose-50 text-xs font-semibold flex items-center gap-1 cursor-pointer"
+                  >
+                    <Ban className="w-3.5 h-3.5" />
+                    <span>Cancel Governance</span>
+                  </button>
+                </div>
 
-                <button
-                  type="button"
-                  id="approve-governance-btn"
-                  onClick={() => {
-                    approveGovernance(opp.id);
-                    setActiveTab('localization');
-                  }}
-                  className="px-5 py-2.5 bg-[#1769E0] text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-colors flex items-center gap-2 shadow-xs cursor-pointer"
-                >
-                  <Check className="w-4 h-4" />
-                  <span>Approve Governance for Localization</span>
-                </button>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => escalateGovernance(opp.id, 'Escalated for second legal audit.')}
+                    className="text-xs font-semibold text-amber-700 hover:underline"
+                  >
+                    Request Escalation
+                  </button>
+
+                  <button
+                    type="button"
+                    id="approve-governance-btn"
+                    onClick={() => {
+                      approveGovernance(opp.id);
+                      setActiveTab('localization');
+                    }}
+                    className="px-5 py-2.5 bg-[#1769E0] text-white rounded-xl text-xs font-bold hover:bg-blue-700 transition-colors flex items-center gap-2 shadow-xs cursor-pointer"
+                  >
+                    <Check className="w-4 h-4" />
+                    <span>Approve Governance for Localization</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -1660,38 +1913,60 @@ export const OpportunityDetail: React.FC = () => {
                   <div className="text-[10px] text-slate-500">
                     Reviewer: <strong>{loc.reviewer}</strong>
                   </div>
-                  <button
-                    type="button"
-                    id={`approve-market-${loc.marketId}-btn`}
-                    onClick={() => approveMarketLocalization(opp.id, loc.marketId)}
-                    className={`w-full py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
-                      loc.status === 'APPROVED'
-                        ? 'bg-emerald-50 text-emerald-800 border border-emerald-300'
-                        : 'bg-[#1769E0] text-white hover:bg-blue-700'
-                    }`}
-                  >
-                    {loc.status === 'APPROVED' ? (
-                      <>
-                        <Check className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>Market Execution Approved</span>
-                      </>
-                    ) : (
-                      <span>Approve {loc.marketName} Execution</span>
-                    )}
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      id={`approve-market-${loc.marketId}-btn`}
+                      onClick={() => approveMarketLocalization(opp.id, loc.marketId)}
+                      className={`flex-1 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1.5 ${
+                        loc.status === 'APPROVED'
+                          ? 'bg-emerald-50 text-emerald-800 border border-emerald-300'
+                          : 'bg-[#1769E0] text-white hover:bg-blue-700'
+                      }`}
+                    >
+                      {loc.status === 'APPROVED' ? (
+                        <>
+                          <Check className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>Approved</span>
+                        </>
+                      ) : (
+                        <span>Approve Market</span>
+                      )}
+                    </button>
+
+                    <button
+                      type="button"
+                      title="Cancel this regional market localization"
+                      onClick={() => cancelLocalizationMarket(opp.id, loc.marketId, 'Excluded by Brand Manager')}
+                      className="px-2.5 py-2 rounded-xl border border-rose-200 text-rose-600 hover:bg-rose-50 text-xs font-bold transition-colors cursor-pointer"
+                    >
+                      <Ban className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 </div>
               </div>
             ))}
           </div>
 
           <div className="flex items-center justify-between pt-4 border-t border-[#DCE6F2]">
-            <button
-              type="button"
-              onClick={() => setActiveTab('governance')}
-              className="px-4 py-2 border border-[#DCE6F2] text-[#5B6B7A] rounded-xl text-xs font-semibold hover:bg-slate-50"
-            >
-              &larr; Back to Governance
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => openRetraceModal('governance')}
+                className="px-3 py-2 border border-[#DCE6F2] text-[#5B6B7A] rounded-xl text-xs font-semibold hover:bg-slate-50 flex items-center gap-1 cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Retrace to Governance</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => openCancelModal('localization')}
+                className="px-3 py-2 border border-rose-200 text-rose-600 rounded-xl text-xs font-semibold hover:bg-rose-50 flex items-center gap-1 cursor-pointer"
+              >
+                <Ban className="w-3.5 h-3.5" />
+                <span>Cancel Localization</span>
+              </button>
+            </div>
 
             <button
               type="button"
@@ -1813,8 +2088,24 @@ export const OpportunityDetail: React.FC = () => {
                 </div>
               </div>
 
-              <div className="pt-2 text-[10px] text-slate-400">
-                Encrypted Unilever DSP Production Gateway
+              <div className="pt-2 text-[10px] text-slate-400 flex items-center justify-between">
+                <span>Encrypted Unilever DSP Gateway</span>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => openRetraceModal('localization')}
+                    className="text-[11px] text-[#5B6B7A] hover:text-[#1769E0] font-semibold flex items-center gap-1 cursor-pointer"
+                  >
+                    <RotateCcw className="w-3 h-3" /> Retrace to Localization
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openCancelModal('activation')}
+                    className="text-[11px] text-rose-600 hover:text-rose-700 font-semibold flex items-center gap-1 cursor-pointer"
+                  >
+                    <Ban className="w-3 h-3" /> Abort Activation
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -2000,6 +2291,448 @@ export const OpportunityDetail: React.FC = () => {
           rejectOpportunityDecision(opp.id);
         }}
       />
+
+      {/* ========================================================================= */}
+      {/* 1. RETRACE PIPELINE MODAL */}
+      {/* ========================================================================= */}
+      {showRetraceModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl border border-[#DCE6F2] shadow-2xl max-w-xl w-full p-6 space-y-5 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-3 border-b border-[#DCE6F2]">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-blue-100 text-[#1769E0] flex items-center justify-center">
+                  <RotateCcw className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-base text-[#0B1F3A]">Retrace Opportunity Pipeline</h3>
+                  <p className="text-xs text-[#5B6B7A]">Roll back to a previous stage to modify inputs or re-evaluate</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowRetraceModal(false)}
+                className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              <div>
+                <label className="block text-xs font-bold text-[#0B1F3A] mb-1.5">
+                  Select Target Rollback Stage
+                </label>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  {[
+                    { id: 'signal' as const, label: '1. Signal & Evidence' },
+                    { id: 'insight' as const, label: '2. Consumer Insight' },
+                    { id: 'opportunity' as const, label: '3. Decision Engine' },
+                    { id: 'strategy' as const, label: '4. AI Strategy' },
+                    { id: 'creative' as const, label: '5. Creative Studio' },
+                    { id: 'governance' as const, label: '6. Governance' },
+                    { id: 'localization' as const, label: '7. Localization' },
+                    { id: 'activation' as const, label: '8. Activation' }
+                  ].map((stageItem) => {
+                    const isSelected = retraceTargetStage === stageItem.id;
+                    const isCurrent = opp.currentStage === stageItem.id;
+                    return (
+                      <button
+                        key={stageItem.id}
+                        type="button"
+                        onClick={() => setRetraceTargetStage(stageItem.id)}
+                        className={`p-2.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between ${
+                          isSelected
+                            ? 'border-[#1769E0] bg-blue-50/80 ring-2 ring-[#1769E0]/20 font-bold text-[#1769E0]'
+                            : 'border-[#DCE6F2] hover:bg-slate-50 text-[#0B1F3A]'
+                        }`}
+                      >
+                        <span className="text-xs">{stageItem.label}</span>
+                        {isCurrent && (
+                          <span className="text-[10px] text-amber-700 mt-1 font-semibold">Current Active</span>
+                        )}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="p-3 rounded-xl bg-blue-50 border border-blue-200 text-blue-900 leading-relaxed text-[11px]">
+                <strong>Downstream Impact:</strong> Retracing to{' '}
+                <span className="font-bold uppercase text-[#1769E0]">{retraceTargetStage}</span> will reset approvals,
+                creative selections, and safety passes recorded in subsequent stages, allowing the workflow to be re-run cleanly.
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-[#0B1F3A] mb-1">
+                  Reason for Retracing (Optional)
+                </label>
+                <textarea
+                  rows={2}
+                  value={retraceReason}
+                  onChange={(e) => setRetraceReason(e.target.value)}
+                  placeholder="e.g. Need to adjust strategy messaging in light of updated campaign guardrails..."
+                  className="w-full text-xs bg-white border border-[#DCE6F2] rounded-xl p-2.5 text-[#0B1F3A] focus:outline-none focus:border-[#1769E0]"
+                />
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[#DCE6F2]">
+              <button
+                type="button"
+                onClick={() => setShowRetraceModal(false)}
+                className="px-4 py-2 rounded-xl border border-[#DCE6F2] text-xs font-semibold text-[#5B6B7A] hover:bg-slate-50 cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                id="confirm-retrace-pipeline-btn"
+                onClick={confirmRetrace}
+                className="px-4 py-2 rounded-xl bg-[#1769E0] text-white text-xs font-bold hover:bg-blue-700 transition-colors shadow-xs flex items-center gap-1.5 cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Retrace to {retraceTargetStage.toUpperCase()}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 2. CANCEL PIPELINE PART / STAGE MODAL */}
+      {/* ========================================================================= */}
+      {showCancelStageModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl border border-rose-200 shadow-2xl max-w-lg w-full p-6 space-y-5 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-3 border-b border-rose-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center">
+                  <Ban className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-base text-rose-950">Cancel Pipeline Stage</h3>
+                  <p className="text-xs text-[#5B6B7A]">Halt execution of a specific part of the opportunity pipeline</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowCancelStageModal(false)}
+                className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              <div>
+                <label className="block text-xs font-bold text-[#0B1F3A] mb-1">
+                  Target Stage to Cancel
+                </label>
+                <select
+                  value={cancelTargetStage}
+                  onChange={(e) => setCancelTargetStage(e.target.value as WorkflowStage)}
+                  className="w-full text-xs bg-white border border-[#DCE6F2] rounded-xl p-2.5 font-bold text-[#0B1F3A]"
+                >
+                  <option value="signal">Stage 1: Signal & Evidence Ingestion</option>
+                  <option value="insight">Stage 2: Consumer Insight Synthesis</option>
+                  <option value="opportunity">Stage 3: Opportunity Decision Gate</option>
+                  <option value="strategy">Stage 4: AI Strategy & Brief</option>
+                  <option value="creative">Stage 5: Creative Studio & Asset Routing</option>
+                  <option value="governance">Stage 6: Governance & Safety Gate</option>
+                  <option value="localization">Stage 7: Localization & Regional Adaptations</option>
+                  <option value="activation">Stage 8: Live Activation & Media Push</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-[#0B1F3A] mb-1">
+                  Primary Cancellation Reason
+                </label>
+                <select
+                  value={cancelReasonCategory}
+                  onChange={(e) => setCancelReasonCategory(e.target.value)}
+                  className="w-full text-xs bg-white border border-[#DCE6F2] rounded-xl p-2.5 text-[#0B1F3A]"
+                >
+                  <option value="Market conditions changed">Market conditions changed / Window elapsed</option>
+                  <option value="Brand risk / safe harbor trigger">Brand risk / Safe harbor trigger</option>
+                  <option value="Creative brief pivot / Agency rework">Creative brief pivot / Agency rework</option>
+                  <option value="Commercial budget reallocation">Commercial budget reallocation</option>
+                  <option value="Regulatory or legal hold">Regulatory or legal compliance hold</option>
+                  <option value="Duplicate workflow stream">Duplicate workflow stream</option>
+                  <option value="Custom managerial decision">Custom managerial decision</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-xs font-bold text-[#0B1F3A] mb-1">
+                  Additional Details / Rationale
+                </label>
+                <textarea
+                  rows={2}
+                  value={customCancelReason}
+                  onChange={(e) => setCustomCancelReason(e.target.value)}
+                  placeholder="Provide context for why this stage execution is cancelled..."
+                  className="w-full text-xs bg-white border border-[#DCE6F2] rounded-xl p-2.5 text-[#0B1F3A]"
+                />
+              </div>
+
+              <div className="p-3 rounded-xl bg-rose-50 border border-rose-200 text-rose-900 text-[11px] leading-relaxed">
+                Cancelling this stage will mark it as cancelled in the workflow tracker, pause automated advancement,
+                and log a permanent entry to the pipeline audit log. You can resume this stage at any time.
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[#DCE6F2]">
+              <button
+                type="button"
+                onClick={() => setShowCancelStageModal(false)}
+                className="px-4 py-2 rounded-xl border border-[#DCE6F2] text-xs font-semibold text-[#5B6B7A] hover:bg-slate-50 cursor-pointer"
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                id="confirm-cancel-stage-btn"
+                onClick={confirmCancelStage}
+                className="px-4 py-2 rounded-xl bg-rose-600 text-white text-xs font-bold hover:bg-rose-700 transition-colors shadow-xs flex items-center gap-1.5 cursor-pointer"
+              >
+                <Ban className="w-3.5 h-3.5" />
+                <span>Cancel {cancelTargetStage.toUpperCase()} Stage</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 3. RESET PIPELINE MODAL */}
+      {/* ========================================================================= */}
+      {showResetModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl border border-amber-200 shadow-2xl max-w-lg w-full p-6 space-y-5 animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between pb-3 border-b border-amber-100">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center">
+                  <RefreshCw className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-base text-[#0B1F3A]">Reset Opportunity Pipeline</h3>
+                  <p className="text-xs text-[#5B6B7A]">Reinitialize workflow state from a clean checkpoint</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowResetModal(false)}
+                className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="space-y-4 text-xs">
+              <div className="space-y-2.5">
+                <label className="block text-xs font-bold text-[#0B1F3A]">Choose Reset Target Point</label>
+                
+                <label
+                  onClick={() => setResetTargetStart('signal')}
+                  className={`p-3.5 rounded-xl border flex items-start gap-3 cursor-pointer transition-all ${
+                    resetTargetStart === 'signal'
+                      ? 'border-[#1769E0] bg-blue-50/70 ring-2 ring-[#1769E0]/20'
+                      : 'border-[#DCE6F2] hover:bg-slate-50'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="resetTarget"
+                    checked={resetTargetStart === 'signal'}
+                    onChange={() => setResetTargetStart('signal')}
+                    className="mt-0.5"
+                  />
+                  <div>
+                    <span className="font-bold text-[#0B1F3A] block">Full Pipeline Reset (Stage 1: Signal & Evidence)</span>
+                    <span className="text-[11px] text-[#5B6B7A]">
+                      Clears all decision approvals, creative options, governance verifications, localizations, and activations.
+                    </span>
+                  </div>
+                </label>
+
+                <label
+                  onClick={() => setResetTargetStart('opportunity')}
+                  className={`p-3.5 rounded-xl border flex items-start gap-3 cursor-pointer transition-all ${
+                    resetTargetStart === 'opportunity'
+                      ? 'border-[#1769E0] bg-blue-50/70 ring-2 ring-[#1769E0]/20'
+                      : 'border-[#DCE6F2] hover:bg-slate-50'
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="resetTarget"
+                    checked={resetTargetStart === 'opportunity'}
+                    onChange={() => setResetTargetStart('opportunity')}
+                    className="mt-0.5"
+                  />
+                  <div>
+                    <span className="font-bold text-[#0B1F3A]">Decision Gate Reset (Stage 3: Opportunity Decision)</span>
+                    <span className="text-[11px] text-[#5B6B7A]">
+                      Retains signal intelligence and consumer insights, but resets human decision authorization and all downstream creative and activation stages.
+                    </span>
+                  </div>
+                </label>
+              </div>
+
+              <div className="p-3 rounded-xl bg-amber-50 border border-amber-200 text-amber-900 text-[11px] leading-relaxed flex items-start gap-2">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <span>
+                  <strong>Warning:</strong> All cancellations will be cleared, stage progress will be reset, and an audit entry will be recorded.
+                </span>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2.5 pt-3 border-t border-[#DCE6F2]">
+              <button
+                type="button"
+                onClick={() => setShowResetModal(false)}
+                className="px-4 py-2 rounded-xl border border-[#DCE6F2] text-xs font-semibold text-[#5B6B7A] hover:bg-slate-50 cursor-pointer"
+              >
+                Keep Current State
+              </button>
+              <button
+                type="button"
+                id="confirm-reset-pipeline-btn"
+                onClick={confirmReset}
+                className="px-4 py-2 rounded-xl bg-amber-600 text-white text-xs font-bold hover:bg-amber-700 transition-colors shadow-xs flex items-center gap-1.5 cursor-pointer"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Reset Pipeline Now</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ========================================================================= */}
+      {/* 4. PIPELINE AUDIT & TRACEABILITY DRAWER */}
+      {/* ========================================================================= */}
+      {showAuditDrawer && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="bg-white rounded-2xl border border-[#DCE6F2] shadow-2xl max-w-2xl w-full p-6 space-y-5 animate-in zoom-in-95 duration-200 max-h-[90vh] flex flex-col">
+            <div className="flex items-center justify-between pb-3 border-b border-[#DCE6F2] shrink-0">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center">
+                  <History className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-extrabold text-base text-[#0B1F3A]">Pipeline Audit & State History</h3>
+                  <p className="text-xs text-[#5B6B7A]">
+                    Complete traceability of all advances, retraces, cancellations, and resets
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowAuditDrawer(false)}
+                className="p-1.5 rounded-lg hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto space-y-3 pr-1 text-xs">
+              {(!opp.pipelineAuditHistory || opp.pipelineAuditHistory.length === 0) ? (
+                <div className="text-center py-10 text-[#5B6B7A] space-y-2">
+                  <History className="w-8 h-8 mx-auto text-slate-300" />
+                  <p className="font-semibold text-sm">No Pipeline State Transitions Yet</p>
+                  <p className="text-xs text-slate-400 max-w-sm mx-auto">
+                    Actions such as retracing stages, canceling phases, or resetting workflows will be logged here with actor names, timestamps, and justification.
+                  </p>
+                </div>
+              ) : (
+                opp.pipelineAuditHistory.map((entry) => {
+                  const isCancel = entry.action === 'CANCELED';
+                  const isRetrace = entry.action === 'RETRACED';
+                  const isReset = entry.action === 'RESET';
+                  const isResume = entry.action === 'RESUMED';
+
+                  return (
+                    <div
+                      key={entry.id}
+                      className={`p-3.5 rounded-xl border space-y-1.5 ${
+                        isCancel
+                          ? 'border-rose-200 bg-rose-50/50'
+                          : isRetrace
+                          ? 'border-blue-200 bg-blue-50/50'
+                          : isReset
+                          ? 'border-amber-200 bg-amber-50/50'
+                          : isResume
+                          ? 'border-emerald-200 bg-emerald-50/50'
+                          : 'border-[#DCE6F2] bg-white'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <span
+                            className={`px-2 py-0.5 rounded-md font-extrabold text-[10px] uppercase tracking-wider ${
+                              isCancel
+                                ? 'bg-rose-600 text-white'
+                                : isRetrace
+                                ? 'bg-blue-600 text-white'
+                                : isReset
+                                ? 'bg-amber-600 text-white'
+                                : isResume
+                                ? 'bg-emerald-600 text-white'
+                                : 'bg-slate-700 text-white'
+                            }`}
+                          >
+                            {entry.action}
+                          </span>
+                          <span className="font-bold text-[#0B1F3A] uppercase text-xs">
+                            Stage: {entry.stage}
+                          </span>
+                          {entry.previousStage && entry.targetStage && (
+                            <span className="text-[10px] text-slate-500">
+                              ({entry.previousStage} &rarr; {entry.targetStage})
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[10px] text-slate-400">{entry.timestamp}</span>
+                      </div>
+
+                      <div className="text-[11px] text-[#0B1F3A]">
+                        <strong>Actor:</strong> {entry.actor} ({entry.role})
+                      </div>
+
+                      {entry.reason && (
+                        <div className="text-[11px] text-[#5B6B7A]">
+                          <strong>Reason:</strong> {entry.reason}
+                        </div>
+                      )}
+
+                      {entry.details && (
+                        <div className="text-[10px] text-slate-500 italic">
+                          {entry.details}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })
+              )}
+            </div>
+
+            <div className="flex items-center justify-between pt-3 border-t border-[#DCE6F2] shrink-0">
+              <span className="text-[11px] text-[#5B6B7A]">
+                Total Audit Entries: {opp.pipelineAuditHistory?.length || 0}
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowAuditDrawer(false)}
+                className="px-4 py-2 rounded-xl bg-[#1769E0] text-white text-xs font-bold hover:bg-blue-700 cursor-pointer"
+              >
+                Close Audit Log
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };

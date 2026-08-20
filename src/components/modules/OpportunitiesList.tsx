@@ -29,7 +29,8 @@ export const OpportunitiesList: React.FC = () => {
     setFilterStatus,
     filterMarket,
     setFilterMarket,
-    openIngestModal
+    openIngestModal,
+    openOpportunityGenerator
   } = useApp();
 
   const [viewMode, setViewMode] = useState<'table' | 'grid'>('table');
@@ -71,12 +72,21 @@ export const OpportunitiesList: React.FC = () => {
         <div className="flex items-center gap-2">
           <button
             type="button"
+            id="opportunities-generate-btn"
+            onClick={() => openOpportunityGenerator()}
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-linear-to-r from-[#1769E0] to-cyan-600 hover:from-blue-700 hover:to-cyan-500 text-white text-xs font-bold shadow-xs transition-all cursor-pointer ring-2 ring-blue-300/30"
+          >
+            <Sparkles className="w-3.5 h-3.5 text-cyan-200" />
+            <span>✨ Generate Opportunities</span>
+          </button>
+
+          <button
+            type="button"
             id="opportunities-ingest-btn"
             onClick={() => openIngestModal()}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#1769E0] text-white text-xs font-bold shadow-xs hover:bg-blue-700 transition-all cursor-pointer"
+            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#0B1F3A] hover:bg-[#112F56] text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
           >
-            <Sparkles className="w-3.5 h-3.5 text-cyan-300" />
-            <span>+ Ingest Signal / Data</span>
+            <span>+ Ingest Data</span>
           </button>
 
           <div className="bg-slate-100 p-1 rounded-lg flex items-center border border-slate-200">

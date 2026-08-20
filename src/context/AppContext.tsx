@@ -13,7 +13,8 @@ import {
   StrategyBrief,
   CreativeConcept,
   GovernanceCheckItem,
-  LocalizationMarket
+  LocalizationMarket,
+  PipelineAuditEntry
 } from '../types';
 import { 
   SEEDED_OPPORTUNITIES, 
@@ -55,6 +56,13 @@ interface AppContextType {
   closeIngestModal: () => void;
   ingestCustomSignal: (input: CustomSignalInput) => string;
   
+  // Opportunity Generator & Trend Search Modal State
+  isGeneratorModalOpen: boolean;
+  initialGeneratorQuery: string | null;
+  openOpportunityGenerator: (initialQuery?: string) => void;
+  closeOpportunityGenerator: () => void;
+  ingestOpportunityWithApproval: (opp: Opportunity) => string;
+  
   // In-Stage Customization Functions
   addCustomEvidence: (oppId: string, post: SignalEvidence['samplePosts'][0], additionalData?: { reach?: string; velocity?: number }) => void;
   updateOpportunityInsight: (oppId: string, insight: Partial<ConsumerInsight>) => void;
@@ -68,6 +76,13 @@ interface AppContextType {
   // Demo Walkthrough Mode
   demoMode: boolean;
   demoStep: number;
+  demoScenario: string;
+  isPresenterMode: boolean;
+  isDemoPlaying: boolean;
+  setDemoStep: (step: number) => void;
+  setDemoScenario: (scenarioId: string) => void;
+  togglePresenterMode: () => void;
+  setIsDemoPlaying: (playing: boolean | ((prev: boolean) => boolean)) => void;
   
   // Actions
   setActiveModule: (module: string) => void;
@@ -79,6 +94,12 @@ interface AppContextType {
   
   // Workflow Actions
   advanceOpportunityStage: (opportunityId: string, stage: WorkflowStage) => void;
+  cancelPipelineStage: (opportunityId: string, stage: WorkflowStage, reason?: string) => void;
+  resumePipelineStage: (opportunityId: string, stage: WorkflowStage) => void;
+  retracePipeline: (opportunityId: string, targetStage: WorkflowStage, reason?: string) => void;
+  resetOpportunityPipeline: (opportunityId: string, targetStartStage?: 'signal' | 'opportunity') => void;
+  cancelLocalizationMarket: (opportunityId: string, marketId: string, reason?: string) => void;
+  cancelCreativeConcept: (opportunityId: string, conceptId: string, reason?: string) => void;
   approveOpportunityDecision: (opportunityId: string, notes?: string) => void;
   modifyOpportunityDecision: (opportunityId: string, newOutcome: 'ACT' | 'WATCH' | 'IGNORE' | 'ESCALATE', reason: string) => void;
   rejectOpportunityDecision: (opportunityId: string) => void;
@@ -92,9 +113,11 @@ interface AppContextType {
   applyLearningsToFuture: (opportunityId: string) => void;
   
   // Demo Controls
-  startDemo: () => void;
+  startDemo: (scenarioId?: string) => void;
   nextDemoStep: () => void;
   prevDemoStep: () => void;
+  skipDemoStep: () => void;
+  restartDemo: () => void;
   exitDemo: () => void;
   resetAllData: () => void;
   
@@ -157,6 +180,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Demo Walkthrough Mode
   const [demoMode, setDemoMode] = useState<boolean>(false);
   const [demoStep, setDemoStep] = useState<number>(1);
+  const [demoScenario, setDemoScenarioState] = useState<string>('opp-rexona-referee');
+  const [isPresenterMode, setIsPresenterMode] = useState<boolean>(false);
+  const [isDemoPlaying, setIsDemoPlaying] = useState<boolean>(false);
+
+  const togglePresenterMode = () => {
+    setIsPresenterMode(prev => !prev);
+  };
+
+  const setDemoScenario = (scenarioId: string) => {
+    setDemoScenarioState(scenarioId);
+    setSelectedOpportunityId(scenarioId);
+    setDemoStep(1);
+    setIsDemoPlaying(false);
+  };
 
   // Sync to local storage
   useEffect(() => {
@@ -539,6 +576,293 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   };
 
+  // Pipeline Management Actions: Cancel Part, Retrace Pipeline, Reset Pipeline
+  const cancelPipelineStage = (opportunityId: string, stage: WorkflowStage, reason?: string) => {
+    const defaultReason = reason || `Stage "${stage.toUpperCase()}" execution was cancelled by Brand Manager.`;
+    const nowTimestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    setOpportunities(prev => prev.map(opp => {
+      if (opp.id === opportunityId) {
+        const currentCanceled = opp.canceledStages || [];
+        const updatedCanceled = currentCanceled.includes(stage) ? currentCanceled : [...currentCanceled, stage];
+        const updatedReasons = {
+          ...(opp.canceledStageReasons || {}),
+          [stage]: defaultReason
+        };
+
+        const auditEntry: PipelineAuditEntry = {
+          id: `audit-${Date.now()}`,
+          stage,
+          action: 'CANCELED',
+          timestamp: nowTimestamp,
+          actor: userWorkspace.userName,
+          role: userWorkspace.userRole,
+          reason: defaultReason,
+          details: `Cancelled stage "${stage}" in pipeline. Downstream tasks paused.`
+        };
+
+        const isCurrent = opp.currentStage === stage;
+
+        return {
+          ...opp,
+          canceledStages: updatedCanceled,
+          canceledStageReasons: updatedReasons,
+          isPipelinePaused: isCurrent ? true : opp.isPipelinePaused,
+          status: isCurrent ? 'BLOCKED' : opp.status,
+          pipelineAuditHistory: [auditEntry, ...(opp.pipelineAuditHistory || [])]
+        };
+      }
+      return opp;
+    }));
+
+    setWorkflows(prev => prev.map(wf => {
+      if (wf.opportunityId === opportunityId) {
+        return {
+          ...wf,
+          status: 'PAUSED',
+          nextAction: `Stage ${stage.toUpperCase()} Canceled: ${defaultReason}`,
+          updatedAt: 'Just now'
+        };
+      }
+      return wf;
+    }));
+
+    addNotification(
+      `⛔ Pipeline Stage Cancelled: ${stage.toUpperCase()}`,
+      defaultReason,
+      'sla',
+      opportunityId
+    );
+  };
+
+  const resumePipelineStage = (opportunityId: string, stage: WorkflowStage) => {
+    const nowTimestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    setOpportunities(prev => prev.map(opp => {
+      if (opp.id === opportunityId) {
+        const updatedCanceled = (opp.canceledStages || []).filter(s => s !== stage);
+        const updatedReasons = { ...(opp.canceledStageReasons || {}) };
+        delete updatedReasons[stage];
+
+        const auditEntry: PipelineAuditEntry = {
+          id: `audit-${Date.now()}`,
+          stage,
+          action: 'RESUMED',
+          timestamp: nowTimestamp,
+          actor: userWorkspace.userName,
+          role: userWorkspace.userRole,
+          details: `Resumed stage "${stage}". Removed cancellation block.`
+        };
+
+        return {
+          ...opp,
+          canceledStages: updatedCanceled,
+          canceledStageReasons: updatedReasons,
+          isPipelinePaused: updatedCanceled.length > 0,
+          status: opp.status === 'BLOCKED' ? 'IN PROGRESS' : opp.status,
+          pipelineAuditHistory: [auditEntry, ...(opp.pipelineAuditHistory || [])]
+        };
+      }
+      return opp;
+    }));
+
+    addNotification(
+      `▶️ Pipeline Stage Resumed: ${stage.toUpperCase()}`,
+      `Cancellation removed. Pipeline resumed by ${userWorkspace.userName}.`,
+      'opportunity',
+      opportunityId
+    );
+  };
+
+  const retracePipeline = (opportunityId: string, targetStage: WorkflowStage, reason?: string) => {
+    const stageProgressMap: Record<WorkflowStage, number> = {
+      signal: 15,
+      insight: 25,
+      opportunity: 38,
+      strategy: 48,
+      creative: 62,
+      governance: 75,
+      localization: 88,
+      activation: 95,
+      learning: 100
+    };
+
+    const stageOrder: WorkflowStage[] = [
+      'signal', 'insight', 'opportunity', 'strategy', 'creative', 'governance', 'localization', 'activation', 'learning'
+    ];
+
+    const targetIdx = stageOrder.indexOf(targetStage);
+    const defaultReason = reason || `Retraced pipeline to ${targetStage.toUpperCase()} by Brand Manager.`;
+    const nowTimestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+    setOpportunities(prev => prev.map(opp => {
+      if (opp.id === opportunityId) {
+        const auditEntry: PipelineAuditEntry = {
+          id: `audit-${Date.now()}`,
+          stage: targetStage,
+          previousStage: opp.currentStage,
+          targetStage,
+          action: 'RETRACED',
+          timestamp: nowTimestamp,
+          actor: userWorkspace.userName,
+          role: userWorkspace.userRole,
+          reason: defaultReason,
+          details: `Pipeline rolled back from ${opp.currentStage.toUpperCase()} to ${targetStage.toUpperCase()}`
+        };
+
+        let updatedCreativeBrief = opp.creativeBrief;
+        if (targetIdx < stageOrder.indexOf('creative')) {
+          if (updatedCreativeBrief) {
+            updatedCreativeBrief = { ...updatedCreativeBrief, approved: false };
+          }
+        }
+
+        let updatedGovernance = opp.governance;
+        if (targetIdx < stageOrder.indexOf('governance')) {
+          updatedGovernance = {
+            ...opp.governance,
+            status: 'PENDING'
+          };
+        }
+
+        let updatedLocalizations = opp.localizations;
+        if (targetIdx < stageOrder.indexOf('localization')) {
+          updatedLocalizations = opp.localizations.map(l => ({ ...l, status: 'PENDING' as const }));
+        }
+
+        let updatedActivation = opp.activation;
+        if (targetIdx < stageOrder.indexOf('activation')) {
+          if (opp.activation.status === 'ACTIVATED') {
+            updatedActivation = { ...opp.activation, status: 'READY' };
+          }
+        }
+
+        const updatedCanceled = (opp.canceledStages || []).filter(s => stageOrder.indexOf(s) < targetIdx);
+
+        return {
+          ...opp,
+          currentStage: targetStage,
+          stageProgress: stageProgressMap[targetStage] || 30,
+          status: targetStage === 'signal' ? 'ACT NOW' : targetStage === 'learning' ? 'ACTIVATED' : 'IN PROGRESS',
+          isPipelinePaused: false,
+          canceledStages: updatedCanceled,
+          creativeBrief: updatedCreativeBrief,
+          governance: updatedGovernance,
+          localizations: updatedLocalizations,
+          activation: updatedActivation,
+          pipelineAuditHistory: [auditEntry, ...(opp.pipelineAuditHistory || [])]
+        };
+      }
+      return opp;
+    }));
+
+    syncWorkflowItem(opportunityId, targetStage, stageProgressMap[targetStage] || 30, `Retraced to ${targetStage.toUpperCase()} • Review & Continue`);
+
+    addNotification(
+      `⏪ Pipeline Retraced to ${targetStage.toUpperCase()}`,
+      defaultReason,
+      'opportunity',
+      opportunityId
+    );
+  };
+
+  const resetOpportunityPipeline = (opportunityId: string, targetStartStage: 'signal' | 'opportunity' = 'signal') => {
+    const nowTimestamp = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const auditEntry: PipelineAuditEntry = {
+      id: `audit-${Date.now()}`,
+      stage: targetStartStage,
+      action: 'RESET',
+      timestamp: nowTimestamp,
+      actor: userWorkspace.userName,
+      role: userWorkspace.userRole,
+      reason: `Full pipeline reset to ${targetStartStage.toUpperCase()}`,
+      details: 'All downstream stage approvals, creative selections, governance gates, and activations reset to clean baseline.'
+    };
+
+    setOpportunities(prev => prev.map(opp => {
+      if (opp.id === opportunityId) {
+        return {
+          ...opp,
+          currentStage: targetStartStage,
+          stageProgress: targetStartStage === 'signal' ? 15 : 38,
+          status: 'ACT NOW',
+          isPipelinePaused: false,
+          canceledStages: [],
+          canceledStageReasons: {},
+          selectedCreativeId: undefined,
+          creativeOptions: opp.creativeOptions.map(c => ({ ...c, status: 'PENDING' as const })),
+          creativeBrief: opp.creativeBrief ? { ...opp.creativeBrief, approved: false } : undefined,
+          governance: {
+            ...opp.governance,
+            status: 'PENDING',
+            approvedBy: undefined,
+            notes: undefined
+          },
+          localizations: opp.localizations.map(l => ({ ...l, status: 'PENDING' as const })),
+          activation: {
+            ...opp.activation,
+            status: 'DRAFT',
+            activatedAt: undefined
+          },
+          decisionTrace: {
+            ...opp.decisionTrace,
+            humanDecision: undefined
+          },
+          pipelineAuditHistory: [auditEntry, ...(opp.pipelineAuditHistory || [])]
+        };
+      }
+      return opp;
+    }));
+
+    syncWorkflowItem(opportunityId, targetStartStage, targetStartStage === 'signal' ? 15 : 38, 'Pipeline Reset • Ready for Ingestion & Decision');
+
+    addNotification(
+      `🔄 Pipeline Reset: ${targetStartStage.toUpperCase()}`,
+      `Pipeline for opportunity reset to clean initial state. Downstream stages cleared.`,
+      'opportunity',
+      opportunityId
+    );
+  };
+
+  const cancelLocalizationMarket = (opportunityId: string, marketId: string, reason?: string) => {
+    const defaultReason = reason || 'Market dropped by brand localization team.';
+    setOpportunities(prev => prev.map(opp => {
+      if (opp.id === opportunityId) {
+        const updatedLocalizations = opp.localizations.map(loc => 
+          loc.marketId === marketId ? { ...loc, status: 'CANCELED' as const, canceledReason: defaultReason } : loc
+        );
+        return {
+          ...opp,
+          localizations: updatedLocalizations
+        };
+      }
+      return opp;
+    }));
+
+    addNotification(
+      `Market Execution Cancelled: ${marketId.toUpperCase()}`,
+      defaultReason,
+      'sla',
+      opportunityId
+    );
+  };
+
+  const cancelCreativeConcept = (opportunityId: string, conceptId: string, reason?: string) => {
+    setOpportunities(prev => prev.map(opp => {
+      if (opp.id === opportunityId) {
+        const updatedConcepts = opp.creativeOptions.map(c => 
+          c.id === conceptId ? { ...c, status: 'REJECTED' as const } : c
+        );
+        return {
+          ...opp,
+          creativeOptions: updatedConcepts,
+          selectedCreativeId: opp.selectedCreativeId === conceptId ? undefined : opp.selectedCreativeId
+        };
+      }
+      return opp;
+    }));
+  };
+
   // Ingest Modal & Custom Signal State
   const [isIngestModalOpen, setIsIngestModalOpen] = useState<boolean>(false);
   const [initialIngestTemplate, setInitialIngestTemplate] = useState<string | null>(null);
@@ -551,6 +875,59 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const closeIngestModal = () => {
     setIsIngestModalOpen(false);
     setInitialIngestTemplate(null);
+  };
+
+  // Opportunity Generator & Trend Search Modal State
+  const [isGeneratorModalOpen, setIsGeneratorModalOpen] = useState<boolean>(false);
+  const [initialGeneratorQuery, setInitialGeneratorQuery] = useState<string | null>(null);
+
+  const openOpportunityGenerator = (initialQuery?: string) => {
+    setInitialGeneratorQuery(initialQuery || null);
+    setIsGeneratorModalOpen(true);
+  };
+
+  const closeOpportunityGenerator = () => {
+    setIsGeneratorModalOpen(false);
+    setInitialGeneratorQuery(null);
+  };
+
+  const ingestOpportunityWithApproval = (opp: Opportunity): string => {
+    // Prepend approved opportunity to state
+    setOpportunities(prev => [opp, ...prev]);
+
+    // Create workflow item
+    const newWorkflowItem: WorkflowItem = {
+      id: 'wf-' + opp.id,
+      opportunityId: opp.id,
+      title: opp.title,
+      brand: opp.brand,
+      market: opp.market,
+      currentStage: opp.currentStage || 'signal',
+      stageLabel: (opp.currentStage || 'SIGNAL').toUpperCase(),
+      progressPercent: opp.stageProgress || 18,
+      owner: userWorkspace.userName,
+      nextAction: 'Review Evidence & Advance Strategic Brief',
+      slaRemaining: '5h 00m',
+      status: 'ACTIVE',
+      risk: opp.risk,
+      updatedAt: 'Just now'
+    };
+    setWorkflows(prev => [newWorkflowItem, ...prev]);
+
+    // Add high-priority notification
+    addNotification(
+      `✨ Opportunity Approved & Ingested: ${opp.title}`,
+      `Human sign-off granted for ${opp.brand} (${opp.market}). Potential Score: ${opp.score.overall}/100. AI Nodes initialized.`,
+      'approval',
+      opp.id
+    );
+
+    // Select and navigate to opportunity view
+    setSelectedOpportunityId(opp.id);
+    setActiveModuleState('opportunities');
+    setIsGeneratorModalOpen(false);
+
+    return opp.id;
   };
 
   // Ingest Custom Signal Engine
@@ -1053,23 +1430,43 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   // Demo Walkthrough System
-  const startDemo = () => {
+  const startDemo = (scenarioId: string = 'opp-rexona-referee') => {
+    setDemoScenarioState(scenarioId);
     setDemoMode(true);
     setDemoStep(1);
-    setSelectedOpportunityId('opp-rexona-referee');
+    setIsDemoPlaying(false);
+    setSelectedOpportunityId(scenarioId);
     setActiveModuleState('opportunities');
   };
 
   const nextDemoStep = () => {
-    setDemoStep(prev => Math.min(prev + 1, 15));
+    setDemoStep(prev => Math.min(prev + 1, 14));
   };
 
   const prevDemoStep = () => {
     setDemoStep(prev => Math.max(prev - 1, 1));
   };
 
+  const skipDemoStep = () => {
+    setDemoStep(prev => Math.min(prev + 1, 14));
+  };
+
+  const restartDemo = () => {
+    setDemoStep(1);
+    setIsDemoPlaying(false);
+    // Optionally restore scenario base data if needed
+    if (demoScenario === 'opp-rexona-referee') {
+      setOpportunities(prev => prev.map(o => o.id === 'opp-rexona-referee' ? {
+        ...INITIAL_HERO_OPPORTUNITY,
+        currentStage: 'signal',
+        status: 'ACT NOW'
+      } : o));
+    }
+  };
+
   const exitDemo = () => {
     setDemoMode(false);
+    setIsDemoPlaying(false);
   };
 
   const resetAllData = () => {
@@ -1085,6 +1482,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setActiveModuleState('command-center');
     setDemoMode(false);
     setDemoStep(1);
+    setDemoScenarioState('opp-rexona-referee');
+    setIsDemoPlaying(false);
   };
 
   const markNotificationAsRead = (id: string) => {
@@ -1118,6 +1517,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       openIngestModal,
       closeIngestModal,
       ingestCustomSignal,
+      isGeneratorModalOpen,
+      initialGeneratorQuery,
+      openOpportunityGenerator,
+      closeOpportunityGenerator,
+      ingestOpportunityWithApproval,
       addCustomEvidence,
       updateOpportunityInsight,
       updateStrategyBrief,
@@ -1128,6 +1532,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       addCustomIntelligenceSignal,
       demoMode,
       demoStep,
+      demoScenario,
+      isPresenterMode,
+      isDemoPlaying,
+      setDemoStep,
+      setDemoScenario,
+      togglePresenterMode,
+      setIsDemoPlaying,
       setActiveModule,
       selectOpportunity,
       setSearchQuery,
@@ -1135,6 +1546,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setFilterStatus,
       setFilterMarket,
       advanceOpportunityStage,
+      cancelPipelineStage,
+      resumePipelineStage,
+      retracePipeline,
+      resetOpportunityPipeline,
+      cancelLocalizationMarket,
+      cancelCreativeConcept,
       approveOpportunityDecision,
       modifyOpportunityDecision,
       rejectOpportunityDecision,
@@ -1149,6 +1566,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       startDemo,
       nextDemoStep,
       prevDemoStep,
+      skipDemoStep,
+      restartDemo,
       exitDemo,
       resetAllData,
       markNotificationAsRead,

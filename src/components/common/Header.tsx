@@ -31,7 +31,8 @@ export const Header: React.FC = () => {
     resetAllData,
     selectOpportunity,
     setActiveModule,
-    openIngestModal
+    openIngestModal,
+    openOpportunityGenerator
   } = useApp();
 
   const [showNotifications, setShowNotifications] = useState(false);
@@ -83,19 +84,37 @@ export const Header: React.FC = () => {
       </div>
 
       {/* Right Action Tools */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-2.5">
         {/* Search Bar */}
-        <div className="relative hidden md:block w-56 lg:w-64">
+        <div className="relative hidden md:block w-48 lg:w-56">
           <Search className="w-3.5 h-3.5 text-[#5B6B7A] absolute left-3 top-1/2 -translate-y-1/2" />
           <input
             type="text"
             id="global-search-input"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search signals, briefs, brands..."
-            className="w-full bg-[#F5F9FF] border border-[#DCE6F2] text-xs rounded-lg pl-8 pr-3 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#1769E0]/20 focus:border-[#1769E0] placeholder-[#5B6B7A]/70 text-[#0B1F3A]"
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && searchQuery.trim().length > 0) {
+                openOpportunityGenerator(searchQuery.trim());
+              }
+            }}
+            placeholder="Search / Enter to discover..."
+            className="w-full bg-[#F5F9FF] border border-[#DCE6F2] text-xs rounded-lg pl-8 pr-3 py-1.5 focus:outline-hidden focus:ring-2 focus:ring-[#1769E0]/20 focus:border-[#1769E0] placeholder-[#5B6B7A]/70 text-[#0B1F3A]"
           />
         </div>
+
+        {/* Global Opportunity Generator Button */}
+        <button
+          type="button"
+          id="header-generate-opportunities-btn"
+          onClick={() => openOpportunityGenerator(searchQuery)}
+          className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-linear-to-r from-[#1769E0] to-cyan-600 hover:from-blue-700 hover:to-cyan-500 text-white text-xs font-bold shadow-xs transition-all cursor-pointer ring-2 ring-blue-300/30"
+          title="Scan market trends and discover new high-potential opportunities"
+        >
+          <Sparkles className="w-3.5 h-3.5 text-cyan-200" />
+          <span className="hidden sm:inline">✨ Generate Opportunities</span>
+          <span className="sm:hidden">✨ Generate</span>
+        </button>
 
         {/* Global Ingest Signal & Data Button */}
         <button
@@ -105,9 +124,7 @@ export const Header: React.FC = () => {
           className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#0B1F3A] hover:bg-[#112F56] text-white text-xs font-bold shadow-xs transition-all border border-[#112F56] hover:border-cyan-400/30 cursor-pointer"
           title="Input custom data, posts or research signals to test AI pipeline"
         >
-          <Sparkles className="w-3.5 h-3.5 text-cyan-300" />
-          <span className="hidden sm:inline">+ Ingest Data / Signal</span>
-          <span className="sm:hidden">+ Ingest</span>
+          <span>+ Ingest</span>
         </button>
 
         {/* Demo Mode Button */}
@@ -115,22 +132,22 @@ export const Header: React.FC = () => {
           <button
             type="button"
             id="run-demo-button"
-            onClick={startDemo}
-            className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-gradient-to-r from-[#1769E0] to-[#06B6D4] text-white text-xs font-bold shadow-xs hover:opacity-95 transition-all cursor-pointer"
+            onClick={() => startDemo('opp-rexona-referee')}
+            className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl bg-gradient-to-r from-[#1769E0] to-cyan-500 hover:from-blue-700 hover:to-cyan-400 text-white text-xs font-extrabold shadow-sm hover:shadow transition-all cursor-pointer ring-2 ring-blue-500/20"
           >
             <Play className="w-3.5 h-3.5 fill-current" />
-            <span>Run Hero Demo</span>
+            <span>Run Demo</span>
           </button>
         ) : (
-          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-lg bg-blue-100 border border-blue-300 text-xs">
+          <div className="inline-flex items-center gap-2 px-3 py-1 rounded-xl bg-blue-50 border border-blue-200 text-xs">
             <span className="flex items-center gap-1.5 font-bold text-[#1769E0]">
               <span className="w-2 h-2 rounded-full bg-[#1769E0] animate-ping" />
-              Demo Walkthrough Active
+              Demo Mode Active
             </span>
             <button
               type="button"
               onClick={exitDemo}
-              className="text-xs text-[#5B6B7A] hover:text-[#0B1F3A] font-medium underline cursor-pointer"
+              className="text-xs text-[#5B6B7A] hover:text-[#0B1F3A] font-semibold underline cursor-pointer ml-1"
             >
               Exit
             </button>

@@ -12,6 +12,7 @@ import { AnalyticsDashboard } from './components/modules/AnalyticsDashboard';
 import { SettingsView } from './components/modules/SettingsView';
 import { DemoWalkthroughOverlay } from './components/modules/DemoWalkthroughOverlay';
 import { IngestDataModal } from './components/common/IngestDataModal';
+import { OpportunityGeneratorModal } from './components/common/OpportunityGeneratorModal';
 
 const AppContent: React.FC = () => {
   const { activeModule, selectedOpportunityId } = useApp();
@@ -49,6 +50,9 @@ const AppContent: React.FC = () => {
 
       {/* Global Ingest Signal & Data Modal */}
       <IngestDataModal />
+
+      {/* Global AI Opportunity Generator & Market Trend Search Modal */}
+      <OpportunityGeneratorModal />
     </div>
   );
 };

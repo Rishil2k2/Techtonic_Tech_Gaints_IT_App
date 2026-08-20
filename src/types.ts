@@ -1,4 +1,4 @@
-export type SystemOutcome = 'ACT' | 'WATCH' | 'IGNORE' | 'ESCALATE';
+export type SystemOutcome = 'ACT' | 'WATCH' | 'IGNORE' | 'ESCALATE' | 'REJECT';
 
 export type OpportunityStatus = 
   | 'ACT NOW'
@@ -137,12 +137,25 @@ export interface GovernanceCheckItem {
   verifiedClaim?: string;
 }
 
+export interface PipelineAuditEntry {
+  id: string;
+  stage: WorkflowStage;
+  action: 'ADVANCED' | 'CANCELED' | 'RETRACED' | 'RESET' | 'APPROVED' | 'MODIFIED' | 'REJECTED' | 'RESUMED';
+  timestamp: string;
+  actor: string;
+  role?: string;
+  reason?: string;
+  previousStage?: WorkflowStage;
+  targetStage?: WorkflowStage;
+  details?: string;
+}
+
 export interface LocalizationMarket {
-  marketId: 'india' | 'brazil' | 'uk';
+  marketId: 'india' | 'brazil' | 'uk' | string;
   marketName: string;
   countryCode: string;
   flag: string;
-  status: 'PENDING' | 'APPROVED' | 'MODIFIED' | 'ESCALATED';
+  status: 'PENDING' | 'APPROVED' | 'MODIFIED' | 'ESCALATED' | 'CANCELED';
   language: string;
   localHeadline: string;
   localCaption: string;
@@ -152,6 +165,7 @@ export interface LocalizationMarket {
   cta: string;
   governanceNote: string;
   reviewer: string;
+  canceledReason?: string;
 }
 
 export interface Opportunity {
@@ -170,6 +184,10 @@ export interface Opportunity {
   owner: string;
   currentStage: WorkflowStage;
   stageProgress: number; // 0 to 100
+  canceledStages?: WorkflowStage[];
+  canceledStageReasons?: Partial<Record<WorkflowStage, string>>;
+  pipelineAuditHistory?: PipelineAuditEntry[];
+  isPipelinePaused?: boolean;
   
   // Stages Data
   signal: {

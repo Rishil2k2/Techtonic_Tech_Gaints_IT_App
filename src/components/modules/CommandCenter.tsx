@@ -68,11 +68,12 @@ export const CommandCenter: React.FC = () => {
 
           <button
             type="button"
-            onClick={startDemo}
-            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-[#1769E0] text-white text-xs font-bold shadow-xs hover:bg-blue-700 transition-all cursor-pointer"
+            id="command-center-run-demo-btn"
+            onClick={() => startDemo('opp-rexona-referee')}
+            className="inline-flex items-center gap-2 px-3.5 py-2 rounded-xl bg-gradient-to-r from-[#1769E0] to-cyan-500 hover:from-blue-700 hover:to-cyan-400 text-white text-xs font-bold shadow-xs transition-all cursor-pointer"
           >
             <Play className="w-3.5 h-3.5 fill-current" />
-            <span>Launch Seeded Referee Demo</span>
+            <span>▶ Run Demo</span>
           </button>
         </div>
       </div>
